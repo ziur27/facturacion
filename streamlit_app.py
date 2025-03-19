@@ -58,4 +58,12 @@ if menu == "Crear Cliente":
         st.success("Cliente agregado correctamente.")
 
 elif menu == "Ver Clientes":
-    st.header("Clientes Registrados
+    st.header("Clientes Registrados")
+    conn = sqlite3.connect('facturacion.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM clientes")
+    clientes = cursor.fetchall()
+    conn.close()
+
+    df_clientes = pd.DataFrame(clientes, columns=["ID", "Nombre", "Dirección", "Teléfono", "Email", "Número Fiscal"])
+    st.table(df_clientes)
