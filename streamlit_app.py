@@ -4,6 +4,8 @@ import pandas as pd
 from datetime import datetime
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
+import smtplib
+from email.message import EmailMessage
 
 # Crear Base de Datos y conexión
 def create_db():
@@ -26,6 +28,7 @@ def create_db():
         descripcion TEXT,
         cantidad INTEGER,
         precio REAL,
+        estado TEXT DEFAULT 'Pendiente',
         FOREIGN KEY(cliente_id) REFERENCES clientes(id)
     )''')
     conn.commit()
@@ -42,20 +45,43 @@ def add_cliente(nombre, direccion, telefono, email, numero_fiscal):
 
 # Crear PDF de factura
 def create_pdf(factura):
-    c = canvas.Canvas(f"factura_{factura[0]}.pdf", pagesize=LETTER)
+    filename = f"factura_{factura[0]}.pdf"
+    c = canvas.Canvas(filename, pagesize=LETTER)
     c.setFont("Helvetica", 12)
     c.drawString(50, 750, f"Factura ID: {factura[0]}")
-    c.drawString(50, 730, f"Fecha: {factura[2]}")
-    c.drawString(50, 710, f"Descripción: {factura[3]}")
-    c.drawString(50, 690, f"Cantidad: {factura[4]}")
-    c.drawString(50, 670, f"Precio: {factura[5]}")
-    c.drawString(50, 650, f"Total: {factura[4]*factura[5]}")
+    c.drawString(50, 730, f"Cliente: {factura[1]}")
+    c.drawString(50, 710, f"Fecha: {factura[2]}")
+    c.drawString(50, 690, f"Descripción: {factura[3]}")
+    c.drawString(50, 670, f"Cantidad: {factura[4]}")
+    c.drawString(50, 650, f"Precio: {factura[5]}")
+    c.drawString(50, 630, f"Total: {factura[4]*factura[5]}")
     c.save()
+    return filename
+
+# Enviar email con factura
+def enviar_email(destino, archivo):
+    email_user = "tuemail@gmail.com"
+    email_password = "tuclave"
+    subject = "Factura desde la aplicación"
+
+    msg = EmailMessage()
+    msg['From'] = email_user
+    msg['To'] = destino
+    msg['Subject'] = subject
+
+    with open(archivo, 'rb') as f:
+        file_data = f.read()
+        file_name = f.name
+    msg.add_attachment(file_data, maintype='application', subtype='pdf', filename=file_name)
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(email_user, email_password)
+        smtp.send_message(msg)
 
 # Interfaz principal
-st.title("Aplicación de Facturación")
+st.title("Aplicación de Facturación Avanzada")
 
-menu = st.sidebar.radio("Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Historial Facturas"])
+menu = st.sidebar.radio("Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Historial Facturas", "Panel Estadísticas"])
 
 create_db()
 
@@ -100,20 +126,21 @@ elif menu == "Crear Factura":
 elif menu == "Historial Facturas":
     st.header("Historial de Facturas")
     conn = sqlite3.connect('facturacion.db')
-    clientes = pd.read_sql_query("SELECT id, nombre FROM clientes", conn)
-    cliente_filtro = st.selectbox("Filtrar por Cliente", ["Todos"] + clientes["nombre"].tolist())
-
-    query = '''SELECT facturas.id, clientes.nombre, facturas.fecha, facturas.descripcion, facturas.cantidad, facturas.precio
-               FROM facturas INNER JOIN clientes ON facturas.cliente_id = clientes.id'''
-
-    if cliente_filtro != "Todos":
-        query += f" WHERE clientes.nombre = '{cliente_filtro}'"
-
-    facturas = pd.read_sql_query(query, conn)
+    facturas = pd.read_sql_query('''SELECT facturas.id, clientes.nombre, facturas.fecha, facturas.descripcion, facturas.cantidad, facturas.precio, facturas.estado
+                                    FROM facturas INNER JOIN clientes ON facturas.cliente_id = clientes.id''', conn)
     conn.close()
 
-    st.table(facturas)
+    st.dataframe(facturas)
 
     if st.button("Exportar última factura a PDF") and not facturas.empty:
-        create_pdf(facturas.iloc[-1])
-        st.success("PDF generado con éxito.")
+        archivo = create_pdf(facturas.iloc[-1])
+        st.success(f"PDF generado: {archivo}")
+
+elif menu == "Panel Estadísticas":
+    st.header("Resumen Estadístico")
+    conn = sqlite3.connect('facturacion.db')
+    total_facturas = pd.read_sql_query("SELECT COUNT(*) FROM facturas", conn).iloc[0,0]
+    ventas_totales = pd.read_sql_query("SELECT SUM(cantidad * precio) FROM facturas", conn).iloc[0,0]
+    conn.close()
+    st.metric("Total Facturas", total_facturas)
+    st.metric("Ventas Totales", ventas_totales if ventas_totales else 0)
