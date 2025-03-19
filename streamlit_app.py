@@ -8,6 +8,8 @@ import smtplib
 from email.message import EmailMessage
 import base64
 
+st.set_page_config(page_title="Facturación Avanzada", layout="wide")
+
 # Crear Base de Datos y conexión
 def create_db():
     conn = sqlite3.connect('facturacion.db')
@@ -67,41 +69,48 @@ def mostrar_pdf(filename):
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 # Interfaz principal
-st.title("Aplicación de Facturación Avanzada")
+st.title("📄 Aplicación de Facturación Avanzada")
 
-menu = st.sidebar.radio("Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Modificar Factura", "Eliminar Factura", "Historial Facturas", "Panel Estadísticas"])
+menu = st.sidebar.selectbox("📌 Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Historial Facturas", "Panel Estadísticas"])
 
 create_db()
 
 if menu == "Crear Cliente":
-    st.header("Nuevo Cliente")
-    nombre = st.text_input("Nombre")
-    direccion = st.text_input("Dirección")
-    telefono = st.text_input("Teléfono")
-    email = st.text_input("Email")
-    numero_fiscal = st.text_input("Número Fiscal")
+    st.header("➕ Nuevo Cliente")
+    col1, col2 = st.columns(2)
+    with col1:
+        nombre = st.text_input("Nombre")
+        direccion = st.text_input("Dirección")
+        numero_fiscal = st.text_input("Número Fiscal")
+    with col2:
+        telefono = st.text_input("Teléfono")
+        email = st.text_input("Email")
 
-    if st.button("Guardar Cliente"):
+    if st.button("💾 Guardar Cliente"):
         add_cliente(nombre, direccion, telefono, email, numero_fiscal)
         st.success("Cliente agregado correctamente.")
 
 elif menu == "Ver Clientes":
-    st.header("Clientes Registrados")
+    st.header("📋 Clientes Registrados")
     conn = sqlite3.connect('facturacion.db')
     clientes = pd.read_sql_query("SELECT * FROM clientes", conn)
     conn.close()
-    st.table(clientes)
+    st.dataframe(clientes)
 
 elif menu == "Crear Factura":
-    st.header("Nueva Factura")
+    st.header("📝 Nueva Factura")
     conn = sqlite3.connect('facturacion.db')
     clientes = pd.read_sql_query("SELECT id, nombre FROM clientes", conn)
     cliente_seleccionado = st.selectbox("Selecciona Cliente", clientes["nombre"].tolist())
     descripcion = st.text_area("Descripción")
-    cantidad = st.number_input("Cantidad", min_value=1)
-    precio = st.number_input("Precio Unitario", min_value=0.0, step=0.01)
 
-    if st.button("Guardar Factura"):
+    col1, col2 = st.columns(2)
+    with col1:
+        cantidad = st.number_input("Cantidad", min_value=1)
+    with col2:
+        precio = st.number_input("Precio Unitario", min_value=0.0, step=0.01)
+
+    if st.button("📥 Guardar Factura"):
         cliente_id = clientes.loc[clientes['nombre'] == cliente_seleccionado, 'id'].iloc[0]
         fecha = datetime.now().strftime("%Y-%m-%d")
         cursor = conn.cursor()
@@ -112,20 +121,20 @@ elif menu == "Crear Factura":
         st.success("Factura creada exitosamente.")
 
 elif menu == "Historial Facturas":
-    st.header("Historial de Facturas")
+    st.header("🗃️ Historial de Facturas")
     conn = sqlite3.connect('facturacion.db')
     facturas = pd.read_sql_query('''SELECT facturas.id, clientes.nombre, facturas.fecha, facturas.descripcion, facturas.cantidad, facturas.precio, facturas.estado
                                     FROM facturas INNER JOIN clientes ON facturas.cliente_id = clientes.id''', conn)
     conn.close()
     st.dataframe(facturas)
 
-    if st.button("Exportar última factura a PDF") and not facturas.empty:
+    if st.button("📄 Exportar última factura a PDF") and not facturas.empty:
         archivo = create_pdf(facturas.iloc[-1])
         mostrar_pdf(archivo)
         st.success(f"PDF generado: {archivo}")
 
 elif menu == "Panel Estadísticas":
-    st.header("Resumen Estadístico")
+    st.header("📈 Resumen Estadístico")
     conn = sqlite3.connect('facturacion.db')
     total_facturas = pd.read_sql_query("SELECT COUNT(*) FROM facturas", conn).iloc[0,0]
     ventas_totales = pd.read_sql_query("SELECT SUM(cantidad * precio) FROM facturas", conn).iloc[0,0]
