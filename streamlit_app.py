@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 import smtplib
 from email.message import EmailMessage
+import base64
 
 # Crear Base de Datos y conexión
 def create_db():
@@ -58,6 +59,13 @@ def create_pdf(factura):
     c.save()
     return filename
 
+# Mostrar PDF en Streamlit
+def mostrar_pdf(filename):
+    with open(filename, "rb") as f:
+        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="900" type="application/pdf">'
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
 # Interfaz principal
 st.title("Aplicación de Facturación Avanzada")
 
@@ -109,11 +117,11 @@ elif menu == "Historial Facturas":
     facturas = pd.read_sql_query('''SELECT facturas.id, clientes.nombre, facturas.fecha, facturas.descripcion, facturas.cantidad, facturas.precio, facturas.estado
                                     FROM facturas INNER JOIN clientes ON facturas.cliente_id = clientes.id''', conn)
     conn.close()
-
     st.dataframe(facturas)
 
     if st.button("Exportar última factura a PDF") and not facturas.empty:
         archivo = create_pdf(facturas.iloc[-1])
+        mostrar_pdf(archivo)
         st.success(f"PDF generado: {archivo}")
 
 elif menu == "Panel Estadísticas":
