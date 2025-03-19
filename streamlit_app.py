@@ -1,5 +1,6 @@
 import streamlit as st
 import sqlite3
+import pandas as pd
 from datetime import datetime
 
 # Crear Base de Datos y conexión
@@ -57,12 +58,4 @@ if menu == "Crear Cliente":
         st.success("Cliente agregado correctamente.")
 
 elif menu == "Ver Clientes":
-    st.header("Clientes Registrados")
-    conn = sqlite3.connect('facturacion.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clientes")
-    clientes = cursor.fetchall()
-    conn.close()
-
-    for cliente in clientes:
-        st.write(cliente)
+    st.header("Clientes Registrados
