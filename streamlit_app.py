@@ -58,30 +58,10 @@ def create_pdf(factura):
     c.save()
     return filename
 
-# Enviar email con factura
-def enviar_email(destino, archivo):
-    email_user = "tuemail@gmail.com"
-    email_password = "tuclave"
-    subject = "Factura desde la aplicación"
-
-    msg = EmailMessage()
-    msg['From'] = email_user
-    msg['To'] = destino
-    msg['Subject'] = subject
-
-    with open(archivo, 'rb') as f:
-        file_data = f.read()
-        file_name = f.name
-    msg.add_attachment(file_data, maintype='application', subtype='pdf', filename=file_name)
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(email_user, email_password)
-        smtp.send_message(msg)
-
 # Interfaz principal
 st.title("Aplicación de Facturación Avanzada")
 
-menu = st.sidebar.radio("Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Historial Facturas", "Panel Estadísticas"])
+menu = st.sidebar.radio("Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Modificar Factura", "Eliminar Factura", "Historial Facturas", "Panel Estadísticas"])
 
 create_db()
 
@@ -146,4 +126,4 @@ elif menu == "Panel Estadísticas":
     st.metric("Ventas Totales", ventas_totales if ventas_totales else 0)
 
 st.sidebar.markdown("---")
-st.sidebar.write("Desarrollado por tu empresa")
+st.sidebar.write("Desarrollado por Marlon Ruiz")
