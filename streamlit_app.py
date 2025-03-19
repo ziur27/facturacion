@@ -144,3 +144,6 @@ elif menu == "Panel Estadísticas":
     conn.close()
     st.metric("Total Facturas", total_facturas)
     st.metric("Ventas Totales", ventas_totales if ventas_totales else 0)
+
+st.sidebar.markdown("---")
+st.sidebar.write("Desarrollado por tu empresa")
