@@ -6,32 +6,35 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 import base64
 
-st.set_page_config(page_title="Facturación Avanzada", layout="wide")
+# Autenticación básica
+def login():
+    st.sidebar.title("🔒 Iniciar sesión")
+    username = st.sidebar.text_input("Usuario")
+    password = st.sidebar.text_input("Contraseña", type="password")
+    if st.sidebar.button("Ingresar"):
+        if username == "admin" and password == "admin123":
+            st.session_state["autenticado"] = True
+        else:
+            st.error("Credenciales incorrectas")
+
+if "autenticado" not in st.session_state:
+    login()
+    st.stop()
+
+st.set_page_config(page_title="Facturación 1.0", layout="wide")
 
 # Crear Base de Datos y conexión
 def create_db():
     conn = sqlite3.connect('facturacion.db')
     cursor = conn.cursor()
-
     cursor.execute('''CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT,
-        direccion TEXT,
-        telefono TEXT,
-        email TEXT,
-        numero_fiscal TEXT
-    )''')
-
+        nombre TEXT, direccion TEXT, telefono TEXT, email TEXT, numero_fiscal TEXT)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS facturas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente_id INTEGER,
-        fecha TEXT,
-        descripcion TEXT,
-        cantidad INTEGER,
-        precio REAL,
-        estado TEXT DEFAULT 'Pendiente',
-        FOREIGN KEY(cliente_id) REFERENCES clientes(id)
-    )''')
+        cliente_id INTEGER, fecha TEXT, descripcion TEXT,
+        cantidad INTEGER, precio REAL, estado TEXT DEFAULT 'Pendiente',
+        FOREIGN KEY(cliente_id) REFERENCES clientes(id))''')
     conn.commit()
     conn.close()
 
@@ -59,21 +62,18 @@ def create_pdf(factura):
     c.save()
     return filename
 
-# Mostrar PDF en Streamlit
+# Mostrar PDF
 def mostrar_pdf(filename):
     with open(filename, "rb") as f:
         base64_pdf = base64.b64encode(f.read()).decode('utf-8')
     pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="700" height="900" type="application/pdf">'
     st.markdown(pdf_display, unsafe_allow_html=True)
 
-# Interfaz principal
-st.title("📄 Aplicación de Facturación Avanzada")
-
-menu = st.sidebar.selectbox("📌 Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Historial Facturas", "Panel Estadísticas"])
-
+# INTERFAZ
+st.title("📄 Facturación 1.0")
+menu = st.sidebar.selectbox("📌 Menú", ["Crear Cliente", "Ver Clientes", "Crear Factura", "Historial Facturas", "Estadísticas"])
 create_db()
 
-# CREAR CLIENTE
 if menu == "Crear Cliente":
     st.header("➕ Nuevo Cliente")
     col1, col2 = st.columns(2)
@@ -84,7 +84,6 @@ if menu == "Crear Cliente":
     with col2:
         telefono = st.text_input("Teléfono")
         email = st.text_input("Email")
-
     if st.button("💾 Guardar Cliente"):
         if nombre:
             add_cliente(nombre, direccion, telefono, email, numero_fiscal)
@@ -92,12 +91,10 @@ if menu == "Crear Cliente":
         else:
             st.warning("El nombre del cliente es obligatorio.")
 
-# VER CLIENTES + ELIMINAR
 elif menu == "Ver Clientes":
     st.header("📋 Clientes Registrados")
     conn = sqlite3.connect('facturacion.db')
     clientes = pd.read_sql_query("SELECT * FROM clientes", conn)
-
     if clientes.empty:
         st.info("No hay clientes registrados.")
     else:
@@ -109,97 +106,72 @@ elif menu == "Ver Clientes":
             col4.write(row['telefono'])
             col5.write(row['email'])
             col6.write(row['numero_fiscal'])
-
             if col7.button("🗑️ Eliminar", key=f"delete_{row['id']}"):
-                cursor = conn.cursor()
                 try:
-                    cursor.execute("DELETE FROM clientes WHERE id = ?", (row['id'],))
+                    conn.execute("DELETE FROM clientes WHERE id = ?", (row['id'],))
                     conn.commit()
                     st.success(f"Cliente {row['nombre']} eliminado.")
+                    st.stop()
                 except sqlite3.IntegrityError:
                     st.error("No se puede eliminar: el cliente tiene facturas asociadas.")
-                st.experimental_rerun()
-
     conn.close()
 
-# CREAR FACTURA
 elif menu == "Crear Factura":
     st.header("📝 Nueva Factura")
     conn = sqlite3.connect('facturacion.db')
     clientes = pd.read_sql_query("SELECT id, nombre FROM clientes", conn)
-
     if clientes.empty:
-        st.warning("Debes crear al menos un cliente primero.")
+        st.warning("Debes crear un cliente primero.")
     else:
-        cliente_seleccionado = st.selectbox("Selecciona Cliente", clientes["nombre"].tolist())
-        descripcion = st.text_area("Descripción")
-
+        cliente_seleccionado = st.selectbox("Cliente", clientes["nombre"].tolist())
+        descripcion = st.text_area("Descripción del Servicio")
         col1, col2 = st.columns(2)
         with col1:
             cantidad = st.number_input("Cantidad", min_value=1, value=1)
         with col2:
             precio = st.number_input("Precio Unitario", min_value=0.0, step=0.01)
-
         if st.button("📥 Guardar Factura"):
             cliente_id = clientes.loc[clientes['nombre'] == cliente_seleccionado, 'id'].iloc[0]
             fecha = datetime.now().strftime("%Y-%m-%d")
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO facturas (cliente_id, fecha, descripcion, cantidad, precio) VALUES (?, ?, ?, ?, ?)",
-                        (cliente_id, fecha, descripcion, cantidad, precio))
+            conn.execute("INSERT INTO facturas (cliente_id, fecha, descripcion, cantidad, precio) VALUES (?, ?, ?, ?, ?)",
+                         (cliente_id, fecha, descripcion, cantidad, precio))
             conn.commit()
             conn.close()
             st.success("Factura creada exitosamente.")
 
-# HISTORIAL DE FACTURAS + VER + EXPORTAR
 elif menu == "Historial Facturas":
     st.header("🗃️ Historial de Facturas")
     conn = sqlite3.connect('facturacion.db')
     facturas = pd.read_sql_query('''
-        SELECT facturas.id, clientes.nombre AS cliente, facturas.fecha, 
+        SELECT facturas.id, clientes.nombre AS cliente, facturas.fecha,
                facturas.descripcion, facturas.cantidad, facturas.precio, facturas.estado
         FROM facturas
         INNER JOIN clientes ON facturas.cliente_id = clientes.id
         ORDER BY facturas.fecha DESC
     ''', conn)
     conn.close()
-
     if facturas.empty:
         st.info("No hay facturas registradas.")
     else:
         st.dataframe(facturas)
+        factura_id = st.selectbox("Selecciona una factura", facturas["id"].tolist())
+        factura = facturas[facturas["id"] == factura_id].iloc[0]
+        st.write(f"### Factura #{factura['id']} - Cliente: {factura['cliente']}")
+        st.write(f"- Fecha: {factura['fecha']}")
+        st.write(f"- Descripción: {factura['descripcion']}")
+        st.write(f"- Cantidad: {factura['cantidad']}")
+        st.write(f"- Precio unitario: ${factura['precio']}")
+        st.write(f"- Estado: {factura['estado']}")
+        st.write(f"- Total: ${factura['cantidad'] * factura['precio']:.2f}")
+        if st.button("📄 Exportar a PDF"):
+            archivo = create_pdf(factura)
+            mostrar_pdf(archivo)
 
-        clientes_unicos = facturas["cliente"].unique()
-        cliente_filtrado = st.selectbox("Filtrar por cliente", options=["Todos"] + list(clientes_unicos))
-
-        if cliente_filtrado != "Todos":
-            facturas = facturas[facturas["cliente"] == cliente_filtrado]
-
-        factura_seleccionada = st.selectbox("Selecciona una factura", facturas["id"].tolist())
-
-        if factura_seleccionada:
-            factura = facturas[facturas["id"] == factura_seleccionada].iloc[0]
-            st.write(f"### Factura #{factura['id']} - Cliente: {factura['cliente']}")
-            st.write(f"- Fecha: {factura['fecha']}")
-            st.write(f"- Descripción: {factura['descripcion']}")
-            st.write(f"- Cantidad: {factura['cantidad']}")
-            st.write(f"- Precio unitario: ${factura['precio']}")
-            st.write(f"- Estado: {factura['estado']}")
-            st.write(f"- Total: ${factura['cantidad'] * factura['precio']:.2f}")
-
-            if st.button("📄 Exportar esta factura a PDF"):
-                archivo = create_pdf(factura)
-                mostrar_pdf(archivo)
-
-# ESTADÍSTICAS
-elif menu == "Panel Estadísticas":
-    st.header("📈 Resumen Estadístico")
+elif menu == "Estadísticas":
+    st.header("📈 Resumen")
     conn = sqlite3.connect('facturacion.db')
-    total_facturas = pd.read_sql_query("SELECT COUNT(*) FROM facturas", conn).iloc[0,0]
-    ventas_totales = pd.read_sql_query("SELECT SUM(cantidad * precio) FROM facturas", conn).iloc[0,0]
+    total = pd.read_sql_query("SELECT COUNT(*) FROM facturas", conn).iloc[0, 0]
+    suma = pd.read_sql_query("SELECT SUM(cantidad * precio) FROM facturas", conn).iloc[0, 0]
     conn.close()
-    st.metric("Total Facturas", total_facturas)
-    st.metric("Ventas Totales", f"${ventas_totales:.2f}" if ventas_totales else "$0.00")
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.caption("💻 Desarrollado por Marlon Ruiz")
+    st.metric("Total Facturas", total)
+    st.metric("Ventas Totales", f"${suma:.2f}" if suma else "$0.00")
